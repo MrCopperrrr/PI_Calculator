@@ -58,7 +58,7 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
 
     long long N = (digits + 13) / 14;
     long long prec_bits = (long long)ceil(digits * 3.3219280948873626);
-    long long extra_guard = 512 + std::min((long long)4096, (long long)(digits / 1000000));
+    long long extra_guard = 128;
     prec_bits += extra_guard;
 
     const unsigned int C_base = 640320u;
