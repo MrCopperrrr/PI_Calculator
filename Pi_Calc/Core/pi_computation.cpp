@@ -1,19 +1,18 @@
-#include "core_api.h"
+﻿#include "core_api.h"
 #include "binary_split.h"
 #include <mpfr.h>
 #include <cmath>
 #include <cstdio>
 #include <iostream>
 #include <string>
-#include <vector> // Needed for storing thread results
-#include <algorithm> // For std::min
+#include <vector>
+#include <algorithm>
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 // This is the SERIAL implementation of the binary split algorithm.
-// All the OpenMP pragmas have been removed from this function.
 PQT binary_split(long long a, long long b, const mpz_class& C3_over_24) {
     PQT res;
     if (b - a == 1) {
@@ -24,18 +23,30 @@ PQT binary_split(long long a, long long b, const mpz_class& C3_over_24) {
             res.T = 13591409;
             return res;
         }
-        // Cast k to long to resolve ambiguity with mpz_class operators
-        mpz_class pk = (6 * static_cast<long>(k) - 5);
-        pk *= (2 * static_cast<long>(k) - 1);
-        pk *= (6 * static_cast<long>(k) - 1);
 
-        mpz_class kk(static_cast<long>(k));
-        mpz_class qk = kk * kk * kk;
+        // ====================================================================
+        // FINAL, FINAL ROBUST IMPLEMENTATION
+        // The fix is here: explicitly cast the long long 'k' to a 'long'
+        // to resolve the constructor ambiguity.
+        // ====================================================================
+        mpz_class K(static_cast<long>(k));
+
+        // p(k) = (6k-5)(2k-1)(6k-1)
+        mpz_class pk = (mpz_class(6) * K - 5);
+        pk *= (mpz_class(2) * K - 1);
+        pk *= (mpz_class(6) * K - 1);
+
+        // q(k) = k^3 * (C^3 / 24)
+        mpz_class qk = K * K * K;
         qk *= C3_over_24;
 
-        mpz_class ak = 13591409 + mpz_class(545140134) * static_cast<long>(k);
+        // a(k) = 13591409 + 545140134 * k
+        mpz_class ak = mpz_class(13591409) + mpz_class(545140134) * K;
+
         mpz_class tk = pk * ak;
-        if (k & 1) tk = -tk;
+        if (k & 1) {
+            tk = -tk;
+        }
 
         res.P = pk;
         res.Q = qk;
@@ -88,25 +99,18 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
     }
 
     // ====================================================================
-    // ROBUST REDUCTION LOGIC (THE FIX IS HERE)
+    // ROBUST REDUCTION LOGIC
     // ====================================================================
-
-    // 1. Find the first thread that actually did work.
     int first_valid_result_idx = -1;
     for (int i = 0; i < nthreads; ++i) {
-        // A valid result will have P != 0
         if (thread_results[i].P != 0) {
             first_valid_result_idx = i;
             break;
         }
     }
 
-    // 2. If work was done, initialize result and combine the rest.
     if (first_valid_result_idx != -1) {
-        // Initialize with the first valid result
         result = thread_results[first_valid_result_idx];
-
-        // Loop through the remaining threads and combine them
         for (int i = first_valid_result_idx + 1; i < nthreads; ++i) {
             if (thread_results[i].P != 0) {
                 combine(result, result, thread_results[i]);
@@ -114,14 +118,11 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
         }
     }
     else {
-        // This case should not happen if digits > 0, but as a fallback,
-        // compute the first term to avoid a crash.
         result = binary_split(0, 1, C3_over_24);
     }
     // ====================================================================
     // END OF FIX
     // ====================================================================
-
 
     mpfr_set_default_prec((mpfr_prec_t)prec_bits);
     mpfr_t mp_Q, mp_T, mp_tmp, mp_num, mp_pi;
