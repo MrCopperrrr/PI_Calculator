@@ -68,11 +68,7 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
     if (nthreads < 1) nthreads = 1;
 
     long long N = (digits + 13) / 14;
-    if (N == 0) N = 1; // Ensure at least one term for small digit counts
-
-    long long prec_bits = (long long)ceil(digits * 3.3219280948873626);
-    long long extra_guard = 128; // A safe, constant number of guard bits
-    prec_bits += extra_guard;
+    if (N == 0) N = 1;
 
     const unsigned int C_base = 640320u;
     mpz_class C3;
@@ -98,9 +94,7 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
         }
     }
 
-    // ====================================================================
-    // ROBUST REDUCTION LOGIC
-    // ====================================================================
+    // Robustly combine thread results
     int first_valid_result_idx = -1;
     for (int i = 0; i < nthreads; ++i) {
         if (thread_results[i].P != 0) {
@@ -108,7 +102,6 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
             break;
         }
     }
-
     if (first_valid_result_idx != -1) {
         result = thread_results[first_valid_result_idx];
         for (int i = first_valid_result_idx + 1; i < nthreads; ++i) {
@@ -120,6 +113,21 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
     else {
         result = binary_split(0, 1, C3_over_24);
     }
+
+    // ====================================================================
+    // PRECISION FIX: The precision must be large enough for the
+    // intermediate integers AND the final result.
+    // ====================================================================
+    long long final_prec_bits = (long long)ceil(digits * 3.3219280948873626);
+
+    // Calculate bits needed for the huge integers Q and T
+    long long integer_prec_bits = std::max(
+        mpz_sizeinbase(result.Q.get_mpz_t(), 2),
+        mpz_sizeinbase(result.T.get_mpz_t(), 2)
+    );
+
+    // Use the larger of the two precisions, plus a safety margin
+    long long prec_bits = std::max(final_prec_bits, integer_prec_bits) + 128;
     // ====================================================================
     // END OF FIX
     // ====================================================================
@@ -128,6 +136,7 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
     mpfr_t mp_Q, mp_T, mp_tmp, mp_num, mp_pi;
     mpfr_inits2((mpfr_prec_t)prec_bits, mp_Q, mp_T, mp_tmp, mp_num, mp_pi, (mpfr_ptr)0);
 
+    // These conversions are now safe because prec_bits is large enough
     mpfr_set_z(mp_Q, result.Q.get_mpz_t(), MPFR_RNDN);
     mpfr_set_z(mp_T, result.T.get_mpz_t(), MPFR_RNDN);
 
