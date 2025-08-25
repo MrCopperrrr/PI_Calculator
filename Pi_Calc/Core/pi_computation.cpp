@@ -57,8 +57,10 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
     if (nthreads < 1) nthreads = 1;
 
     long long N = (digits + 13) / 14;
+    if (N == 0) N = 1; // Ensure at least one term for small digit counts
+
     long long prec_bits = (long long)ceil(digits * 3.3219280948873626);
-    long long extra_guard = 128;
+    long long extra_guard = 128; // A safe, constant number of guard bits
     prec_bits += extra_guard;
 
     const unsigned int C_base = 640320u;
@@ -73,7 +75,6 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
     std::vector<PQT> thread_results(nthreads);
     PQT result;
 
-    // Manually split the work among threads using OpenMP 2.0
 #pragma omp parallel
     {
         int thread_id = omp_get_thread_num();
@@ -86,13 +87,41 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
         }
     }
 
-    // Combine the results from all threads sequentially in the main thread
-    result = thread_results[0];
-    for (int i = 1; i < nthreads; ++i) {
-        if (thread_results[i].P != 0) { // Check if the thread had work to do
-            combine(result, result, thread_results[i]);
+    // ====================================================================
+    // ROBUST REDUCTION LOGIC (THE FIX IS HERE)
+    // ====================================================================
+
+    // 1. Find the first thread that actually did work.
+    int first_valid_result_idx = -1;
+    for (int i = 0; i < nthreads; ++i) {
+        // A valid result will have P != 0
+        if (thread_results[i].P != 0) {
+            first_valid_result_idx = i;
+            break;
         }
     }
+
+    // 2. If work was done, initialize result and combine the rest.
+    if (first_valid_result_idx != -1) {
+        // Initialize with the first valid result
+        result = thread_results[first_valid_result_idx];
+
+        // Loop through the remaining threads and combine them
+        for (int i = first_valid_result_idx + 1; i < nthreads; ++i) {
+            if (thread_results[i].P != 0) {
+                combine(result, result, thread_results[i]);
+            }
+        }
+    }
+    else {
+        // This case should not happen if digits > 0, but as a fallback,
+        // compute the first term to avoid a crash.
+        result = binary_split(0, 1, C3_over_24);
+    }
+    // ====================================================================
+    // END OF FIX
+    // ====================================================================
+
 
     mpfr_set_default_prec((mpfr_prec_t)prec_bits);
     mpfr_t mp_Q, mp_T, mp_tmp, mp_num, mp_pi;
@@ -117,8 +146,6 @@ void compute_pi(long long digits, int nthreads, const char* outfile) {
         return;
     }
 
-    // Use mpfr_fprintf for robust, formatted output.
-    // This prints pi with 'digits' number of digits after the decimal point.
     mpfr_fprintf(f, "%.*Rfd\n", (int)digits, mp_pi);
 
     fclose(f);
