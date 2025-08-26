@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <chrono>
+#include <sstream> // Required for std::stringstream
 #include "..\Core\Core.h"
 
 void write_to_file(const std::string& filename, const std::string& content)
@@ -16,6 +17,74 @@ void write_to_file(const std::string& filename, const std::string& content)
     outFile.close();
     std::cout << "Successfully wrote Pi to " << filename << std::endl;
 }
+
+/**
+ * @brief Formats a duration in milliseconds into a human-readable string.
+ *
+ * @param ms The duration to format, as a std::chrono::milliseconds object.
+ * @return A string in the format: X year(s) X month(s) X day(s)...
+ */
+std::string format_duration(std::chrono::milliseconds ms)
+{
+    if (ms.count() == 0) {
+        return "0 millisecond(s)";
+    }
+
+    // Use long long to avoid overflow for very long durations
+    long long total_ms = ms.count();
+
+    // Define durations in milliseconds (using average values for month/year)
+    constexpr long long ms_in_second = 1000;
+    constexpr long long ms_in_minute = ms_in_second * 60;
+    constexpr long long ms_in_hour = ms_in_minute * 60;
+    constexpr long long ms_in_day = ms_in_hour * 24;
+    constexpr long long ms_in_month = static_cast<long long>(ms_in_day * 30.4375); // Average month
+    constexpr long long ms_in_year = static_cast<long long>(ms_in_day * 365.25);  // Average year
+
+    // Calculate each unit
+    long long years = total_ms / ms_in_year;
+    total_ms %= ms_in_year;
+
+    long long months = total_ms / ms_in_month;
+    total_ms %= ms_in_month;
+
+    long long days = total_ms / ms_in_day;
+    total_ms %= ms_in_day;
+
+    long long hours = total_ms / ms_in_hour;
+    total_ms %= ms_in_hour;
+
+    long long minutes = total_ms / ms_in_minute;
+    total_ms %= ms_in_minute;
+
+    long long seconds = total_ms / ms_in_second;
+    total_ms %= ms_in_second;
+
+    long long milliseconds = total_ms;
+
+    // Build the output string
+    std::stringstream ss;
+    if (years > 0)   ss << years << " year(s) ";
+    if (months > 0)  ss << months << " month(s) ";
+    if (days > 0)    ss << days << " day(s) ";
+    if (hours > 0)   ss << hours << " hour(s) ";
+    if (minutes > 0) ss << minutes << " minute(s) ";
+    if (seconds > 0) ss << seconds << " second(s) ";
+
+    // Always show milliseconds, especially if the duration is less than a second
+    if (milliseconds > 0 || ss.str().empty()) {
+        ss << milliseconds << " millisecond(s)";
+    }
+
+    std::string result = ss.str();
+    // Remove potential trailing space
+    if (!result.empty() && result.back() == ' ') {
+        result.pop_back();
+    }
+
+    return result;
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -41,9 +110,12 @@ int main(int argc, char* argv[])
         std::string pi = PiCalculator::Chudnovsky::calculate(digits, num_threads);
 
         auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
 
-        std::cout << "Calculation finished in " << elapsed.count() << " seconds." << std::endl;
+        // Calculate the duration and cast it to milliseconds
+        auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+        // Use the new formatting function
+        std::cout << "Calculation finished in " << format_duration(elapsed_ms) << "." << std::endl;
 
         if (argc == 4)
         {
