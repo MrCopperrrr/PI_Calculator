@@ -2,7 +2,7 @@
 #include <fstream>
 #include <string>
 #include <chrono>
-#include "Core.h"
+#include "..\Core\Core.h"
 
 void write_to_file(const std::string& filename, const std::string& content)
 {
