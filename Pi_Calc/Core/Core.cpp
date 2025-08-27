@@ -12,13 +12,12 @@
 #include <vector>
 #include <thread>
 #include <cmath>
-#include <mutex>
 
 // Constants for the Chudnovsky algorithm
-#define A 13591409
-#define B 545140134
-#define C 640320
-#define D 12
+const unsigned long A = 13591409;
+const unsigned long B = 545140134;
+const unsigned long C = 640320;
+const unsigned long D = 12;
 
 // Structure to hold the P, Q, T values for binary splitting
 struct PQT {
@@ -33,21 +32,45 @@ void compute_bs(unsigned long a, unsigned long b, PQT& result) {
     mpz_init(result.t);
 
     if (b - a == 1) {
-        // Base case of the recursion
-        mpz_set_ui(result.p, (2 * b - 1));
-        mpz_mul_ui(result.p, result.p, (6 * b - 1));
-        mpz_mul_ui(result.p, result.p, (6 * b - 5));
+        // Base case of the recursion: compute for a single term 'a'
+        if (a == 0) {
+            mpz_set_ui(result.p, 1);
+            mpz_set_ui(result.q, 1);
+        }
+        else {
+            // P(a) = (6a-5)(2a-1)(6a-1)
+            mpz_set_ui(result.p, 6 * a - 5);
+            mpz_mul_ui(result.p, result.p, 2 * a - 1);
+            mpz_mul_ui(result.p, result.p, 6 * a - 1);
 
-        mpz_set_ui(result.q, C);
-        mpz_mul_ui(result.q, result.q, C);
-        mpz_mul_ui(result.q, result.q, C);
-        mpz_divexact_ui(result.q, result.q, 24);
+            // Q(a) = C^3 * a^3 / 24
+            mpz_t a_cubed;
+            mpz_init(a_cubed);
+            mpz_set_ui(a_cubed, a);
+            mpz_pow_ui(a_cubed, a_cubed, 3);
 
-        mpz_set_si(result.t, (A + (long long)B * b));
-        if (b % 2 == 1) {
+            mpz_t C_cubed;
+            mpz_init(C_cubed);
+            mpz_set_ui(C_cubed, C);
+            mpz_pow_ui(C_cubed, C_cubed, 3);
+
+            mpz_mul(result.q, C_cubed, a_cubed);
+            mpz_divexact_ui(result.q, result.q, 24);
+
+            mpz_clear(a_cubed);
+            mpz_clear(C_cubed);
+        }
+
+        // T(a) = (A + B*a) * P(a)
+        mpz_set_ui(result.t, a);
+        mpz_mul_ui(result.t, result.t, B);
+        mpz_add_ui(result.t, result.t, A);
+        mpz_mul(result.t, result.t, result.p);
+
+        // T(a) *= (-1)^a
+        if (a % 2 == 1) {
             mpz_neg(result.t, result.t);
         }
-        mpz_mul(result.t, result.t, result.p);
     }
     else {
         // Recursive step
@@ -57,6 +80,9 @@ void compute_bs(unsigned long a, unsigned long b, PQT& result) {
         compute_bs(mid, b, r2);
 
         // Combine results from the two halves
+        // P(a,b) = P(a,mid) * P(mid,b)
+        // Q(a,b) = Q(a,mid) * Q(mid,b)
+        // T(a,b) = T(a,mid)*Q(mid,b) + P(a,mid)*T(mid,b)
         mpz_mul(result.p, r1.p, r2.p);
         mpz_mul(result.q, r1.q, r2.q);
 
@@ -80,32 +106,30 @@ namespace PiCalculator
     std::string Chudnovsky::calculate(int digits, int num_threads)
     {
         // Set precision: digits * log2(10) + a small margin
-        long precision_bits = (long)(digits * 3.3219280949) + 16;
+        long precision_bits = (long)(digits * 3.3219280949) + 32;
         mpf_set_default_prec(precision_bits);
 
-        // Determine the number of terms needed for the series.
-        // Each term adds about 14.18 digits of precision.
+        // Determine the number of terms needed. Each term adds about 14.18 digits.
         unsigned long num_terms = (unsigned long)(digits / 14.18) + 2;
 
         std::vector<std::thread> threads;
         std::vector<PQT> results(num_threads);
         unsigned long terms_per_thread = num_terms / num_threads;
 
-        // Launch threads to compute parts of the series in parallel
         for (int i = 0; i < num_threads; ++i) {
             unsigned long start = i * terms_per_thread;
             unsigned long end = (i == num_threads - 1) ? num_terms : start + terms_per_thread;
+            if (start == end) continue; // Avoid launching threads that do no work
             threads.emplace_back(compute_bs, start, end, std::ref(results[i]));
         }
 
-        // Wait for all threads to finish
         for (auto& t : threads) {
-            t.join();
+            if (t.joinable()) t.join();
         }
 
-        // --- Combine the results from all threads ---
+        // Combine the results from all threads
         PQT final_res = results[0];
-        for (int i = 1; i < num_threads; ++i) {
+        for (size_t i = 1; i < threads.size(); ++i) {
             mpz_t p_temp, q_temp, t_temp;
             mpz_init_set(p_temp, final_res.p);
             mpz_init_set(q_temp, final_res.q);
@@ -116,7 +140,6 @@ namespace PiCalculator
 
             mpz_t tmp1, tmp2;
             mpz_init(tmp1); mpz_init(tmp2);
-
             mpz_mul(tmp1, t_temp, results[i].q);
             mpz_mul(tmp2, p_temp, results[i].t);
             mpz_add(final_res.t, tmp1, tmp2);
@@ -126,47 +149,42 @@ namespace PiCalculator
             mpz_clear(results[i].p); mpz_clear(results[i].q); mpz_clear(results[i].t);
         }
 
-        // --- Perform the final steps of the Chudnovsky formula ---
-        mpf_t pi, temp_q, temp_t, C_sqrt;
+        // Perform the final steps of the Chudnovsky formula
+        // 1/pi = (12 * T) / (C^(3/2) * Q)
+        mpf_t pi, C_sqrt, C_3_2, numerator, denominator;
         mpf_init(pi);
-        mpf_init(temp_q);
-        mpf_init(temp_t);
         mpf_init_set_ui(C_sqrt, C);
+        mpf_init(C_3_2);
+        mpf_init(numerator);
+        mpf_init(denominator);
 
-        mpf_sqrt(C_sqrt, C_sqrt); // sqrt(C)
+        mpf_sqrt(C_sqrt, C_sqrt);                      // C_sqrt = sqrt(C)
+        mpf_mul_ui(C_3_2, C_sqrt, C);                  // C_3_2 = C * sqrt(C)
 
-        mpf_set_z(temp_q, final_res.q); // Q value
-        mpf_set_z(temp_t, final_res.t); // T value
+        mpf_set_z(numerator, final_res.t);
+        mpf_mul_ui(numerator, numerator, D);           // numerator = 12 * T
 
-        // pi = (Q * sqrt(C)) / (A*Q + T)
-        mpf_mul_ui(pi, temp_q, A);
-        mpf_add(pi, pi, temp_t);
-        mpf_ui_div(pi, D, pi); // This is part of the formula, D*...
+        mpf_set_z(denominator, final_res.q);
+        mpf_mul(denominator, denominator, C_3_2);      // denominator = Q * C^(3/2)
 
-        mpf_mul(pi, pi, temp_q);
-        mpf_mul(pi, pi, C_sqrt);
+        mpf_div(pi, numerator, denominator);           // pi holds 1/pi for now
+        mpf_ui_div(pi, 1, pi);                         // pi = 1 / (1/pi)
 
-        mpf_t inv_pi;
-        mpf_init(inv_pi);
-        mpf_ui_div(inv_pi, 1, pi);
-
-        // --- Format the output string ---
-        // Request digits + 2 characters ('3' and the null terminator)
-        // mpf_get_str allocates memory, which must be freed.
+        // Format the output string
         mp_exp_t exp;
-        char* str = mpf_get_str(NULL, &exp, 10, digits + 1, inv_pi);
+        char* str = mpf_get_str(NULL, &exp, 10, digits + 1, pi);
         std::string pi_str = "3." + std::string(str + 1);
 
-        // Clean up all GMP variables
+        // Clean up
         free(str);
         mpz_clear(final_res.p);
         mpz_clear(final_res.q);
         mpz_clear(final_res.t);
         mpf_clear(pi);
-        mpf_clear(temp_q);
-        mpf_clear(temp_t);
         mpf_clear(C_sqrt);
-        mpf_clear(inv_pi);
+        mpf_clear(C_3_2);
+        mpf_clear(numerator);
+        mpf_clear(denominator);
 
         return pi_str;
     }
