@@ -1,15 +1,8 @@
-# PI Calculator
+## Build
+g++ -O3 -march=native main.cpp -o main -lmpfr -lgmpxx -lgmp
+g++ -O3 -march=native -flto  main.cpp -o main -lmpfr -lgmpxx -lgmp
+g++ -Ofast -march=native -mtune=native -funroll-loops -flto -m64 -fopenmp -fomit-frame-pointer -DNDEBUG -pipe -o main main.cpp -lmpfr -lgmpxx -lgmp -pthread
 
-This repository contains a program to calculate the value of π (pi).
 
-## Contributing
-
-Contributions are welcome! Feel free to open issues or submit pull requests.
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
-## Acknowledgments
-
-Inspired by the mathematical beauty of π and its applications in various fields.
+## Run
+./main 16 100000
