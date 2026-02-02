@@ -1,0 +1,26 @@
+[
+{
+  "directory": "F:/PI_Calculator/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/pi_calc.dir/includes_CXX.rsp -g -std=gnu++17 -O3 -mavx2 -march=native -ffast-math -pthread -fopenmp -fopenmp -o CMakeFiles\\pi_calc.dir\\src\\main.cpp.obj -c F:\\PI_Calculator\\src\\main.cpp",
+  "file": "F:/PI_Calculator/src/main.cpp",
+  "output": "CMakeFiles/pi_calc.dir/src/main.cpp.obj"
+},
+{
+  "directory": "F:/PI_Calculator/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/pi_calc.dir/includes_CXX.rsp -g -std=gnu++17 -O3 -mavx2 -march=native -ffast-math -pthread -fopenmp -fopenmp -o CMakeFiles\\pi_calc.dir\\src\\bigint.cpp.obj -c F:\\PI_Calculator\\src\\bigint.cpp",
+  "file": "F:/PI_Calculator/src/bigint.cpp",
+  "output": "CMakeFiles/pi_calc.dir/src/bigint.cpp.obj"
+},
+{
+  "directory": "F:/PI_Calculator/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/pi_calc.dir/includes_CXX.rsp -g -std=gnu++17 -O3 -mavx2 -march=native -ffast-math -pthread -fopenmp -fopenmp -o CMakeFiles\\pi_calc.dir\\src\\chudnovsky.cpp.obj -c F:\\PI_Calculator\\src\\chudnovsky.cpp",
+  "file": "F:/PI_Calculator/src/chudnovsky.cpp",
+  "output": "CMakeFiles/pi_calc.dir/src/chudnovsky.cpp.obj"
+},
+{
+  "directory": "F:/PI_Calculator/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/pi_calc.dir/includes_CXX.rsp -g -std=gnu++17 -O3 -mavx2 -march=native -ffast-math -pthread -fopenmp -fopenmp -o CMakeFiles\\pi_calc.dir\\src\\base_conv.cpp.obj -c F:\\PI_Calculator\\src\\base_conv.cpp",
+  "file": "F:/PI_Calculator/src/base_conv.cpp",
+  "output": "CMakeFiles/pi_calc.dir/src/base_conv.cpp.obj"
+}
+]

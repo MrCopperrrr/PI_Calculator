@@ -1,0 +1,3 @@
+F:/PI_Calculator/build/CMakeFiles/pi_calc.dir
+F:/PI_Calculator/build/CMakeFiles/edit_cache.dir
+F:/PI_Calculator/build/CMakeFiles/rebuild_cache.dir
