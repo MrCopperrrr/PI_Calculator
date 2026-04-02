@@ -17,11 +17,20 @@ set(SOURCES
     src/bigint.cpp 
     src/chudnovsky.cpp 
     src/base_conv.cpp
+    src/ntt.cpp
 )
 
 include_directories(include)
 
-find_library(GMP_LIB NAMES gmp libgmp)
+# Robust GMP detection
+if(WIN32)
+    find_library(GMP_LIB NAMES gmp libgmp HINTS C:/msys64/ucrt64/lib C:/msys64/mingw64/lib)
+    if(NOT GMP_LIB)
+        set(GMP_LIB "gmp") # Fallback to linker flag
+    endif()
+else()
+    find_library(GMP_LIB NAMES gmp REQUIRED)
+endif()
 
 add_executable(pi_calc ${SOURCES})
 target_link_libraries(pi_calc PRIVATE ${GMP_LIB} OpenMP::OpenMP_CXX)
