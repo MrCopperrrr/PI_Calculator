@@ -1,5 +1,6 @@
 #include "base_conv.hpp"
 #include "bigint.hpp"
+#include "ntt.hpp"
 #include "timer.hpp"
 #include <algorithm>
 #include <cmath>
@@ -10,13 +11,19 @@
 #include <omp.h>
 #include <string>
 #include <vector>
-#include <windows.h>
 
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/resource.h>
+#include <sys/time.h>
+#endif
 
 using namespace pi;
 
 void log_event(const Timer &timer, const char *event) {
-  printf("%.3f\t%s\n", timer.elapsed_seconds(), event);
+  printf("\n%.3f\t%s\n", timer.elapsed_seconds(), event);
   fflush(stdout);
 }
 
@@ -48,6 +55,7 @@ struct CPUMetrics {
 };
 
 CPUMetrics get_cpu_metrics() {
+#ifdef _WIN32
   FILETIME creation_time, exit_time, kernel_time_ft, user_time_ft;
   if (GetProcessTimes(GetCurrentProcess(), &creation_time, &exit_time,
                       &kernel_time_ft, &user_time_ft)) {
@@ -59,11 +67,20 @@ CPUMetrics get_cpu_metrics() {
     return {(double)user_ui.QuadPart / 10000000.0,
             (double)kernel_ui.QuadPart / 10000000.0};
   }
+#else
+  struct rusage usage;
+  if (getrusage(RUSAGE_SELF, &usage) == 0) {
+    return {(double)usage.ru_utime.tv_sec +
+                (double)usage.ru_utime.tv_usec / 1000000.0,
+            (double)usage.ru_stime.tv_sec +
+                (double)usage.ru_stime.tv_usec / 1000000.0};
+  }
+#endif
   return {0, 0};
 }
 
 int main(int argc, char *argv[]) {
-  omp_set_nested(1);
+  omp_set_max_active_levels(3);
   int64_t digits = 1000;
   if (argc > 1)
     digits = parse_digits(argv[1]);
@@ -71,19 +88,13 @@ int main(int argc, char *argv[]) {
   Timer total_timer;
   int64_t iterations = (double)digits / 14.1816459 + 10;
 
-  std::cout << "Program:               Pi-Calc v1.7 (Analytical)" << std::endl;
+  std::cout << "Program:               Pi-Calc v2.5 (Extreme Edition)"
+            << std::endl;
   std::cout << "Algorithm:             Chudnovsky (1988)" << std::endl;
   std::cout << "Decimal Digits:        " << digits << std::endl;
   std::cout << "-----------------------------------------------" << std::endl;
 
   std::cout << "Event Log:" << std::endl;
-  log_event(total_timer, "Working Memory");
-
-  double est_gb = (double)digits * 11.0 / (1024 * 1024 * 1024);
-  char mem_info[128];
-  sprintf(mem_info, "Estimated Memory: %.2f GiB", est_gb);
-  log_event(total_timer, mem_info);
-
   log_event(total_timer, "Begin Computation");
   Timer comp_timer;
 
@@ -94,9 +105,10 @@ int main(int argc, char *argv[]) {
 #pragma omp single
     BigInt::binary_split(0, iterations, P, Q, T);
   }
+  std::cout << std::endl;
   log_event(total_timer, "Step 1: Binary Splitting Finished");
 
-  log_event(total_timer, "Step 2: Integer-Based Evaluation Start");
+  log_event(total_timer, "Step 2: Evaluation (Parallel)");
   int64_t guard = 64;
   mpz_t pi_z, num, sqrt_val, d10;
   mpz_init(pi_z);
@@ -104,17 +116,22 @@ int main(int argc, char *argv[]) {
   mpz_init(sqrt_val);
   mpz_init(d10);
 
-  mpz_ui_pow_ui(d10, 10, 2 * (digits + guard));
+  // High-performance evaluation
+  BigInt::parallel_pow_ui(d10, 10, 2 * (digits + guard));
   mpz_mul_ui(d10, d10, 10005);
   mpz_sqrt(sqrt_val, d10);
 
-  mpz_mul(num, Q.value, sqrt_val);
+  NTTMultiplier::multiply(num, Q.value, sqrt_val);
   mpz_mul_ui(num, num, 426880);
   mpz_tdiv_q(pi_z, num, T.value);
 
-  mpz_ui_pow_ui(d10, 10, guard);
-  mpz_tdiv_q(pi_z, pi_z, d10);
-  log_event(total_timer, "Step 2: Integer-Based Evaluation Finished");
+  mpz_t d10_guard;
+  mpz_init(d10_guard);
+  mpz_ui_pow_ui(d10_guard, 10,
+                guard); // Guard is small, no need for parallel_pow
+  mpz_tdiv_q(pi_z, pi_z, d10_guard);
+  mpz_clear(d10_guard);
+  log_event(total_timer, "Step 2: Evaluation Finished");
 
   double computation_time = comp_timer.elapsed_seconds();
 
@@ -148,21 +165,7 @@ int main(int argc, char *argv[]) {
          user_util / threads, kernel_util / threads);
   std::cout << "-----------------------------------------------" << std::endl;
 
-  std::cout << "First 50 decimal digits:" << std::endl;
-  for (int i = 1; i < 51; ++i)
-    std::cout << result_str[i] << (i % 10 == 0 ? " " : "");
-  std::cout << std::endl;
-
-  std::cout << "Last 10 (pos " << digits << "): ";
-  for (int i = digits - 9; i < digits + 1; ++i)
-    std::cout << result_str[i];
-  std::cout << std::endl;
-
   delete[] result_str;
   mpz_clears(pi_z, num, sqrt_val, d10, NULL);
-  mpz_clear(P.value);
-  mpz_clear(Q.value);
-  mpz_clear(T.value);
-
   return 0;
 }

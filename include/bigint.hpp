@@ -4,7 +4,6 @@
 #include <iostream>
 #include <string>
 
-
 namespace pi {
 
 class BigInt {
@@ -44,6 +43,10 @@ public:
 
   static void binary_split(int64_t a, int64_t b, BigInt &P, BigInt &Q,
                            BigInt &T);
+
+  static void parallel_pow_ui(mpz_t rop, uint64_t base, uint64_t exp);
+  static void parallel_sqrt(mpz_t rop, const mpz_t n);
+  static void parallel_div(mpz_t q, const mpz_t num, const mpz_t den);
 
   void shift_left(size_t limbs) { mpz_mul_2exp(value, value, limbs * 64); }
 

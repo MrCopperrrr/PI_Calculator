@@ -1,32 +1,30 @@
 #pragma once
-#include <stdint.h>
+#include <cstdint>
+#include <gmp.h>
+#include <omp.h>
 #include <vector>
 
 
 namespace pi {
 
-class NTT {
+class NTTMultiplier {
 public:
-  struct Prime {
-    uint64_t p;
-    uint64_t g;
-  };
+  // Primes for Triple-Prime NTT to ensure accuracy for huge numbers
+  static constexpr uint64_t MODS[] = {998244353, 1004535809, 469762049};
+  static constexpr uint64_t G = 3;
 
-  static constexpr Prime P1 = {998244353, 3};
-  static constexpr Prime P2 = {1004535809, 3};
-  static constexpr Prime P3 = {469762049, 3};
+  static void ntt(std::vector<uint64_t> &a, bool invert, uint64_t mod);
 
-  static uint64_t power(uint64_t a, uint64_t b, uint64_t p);
-  static uint64_t modInverse(uint64_t n, uint64_t p);
-  static void ntt(std::vector<uint64_t> &a, bool invert, Prime prime);
-
-  static std::vector<uint64_t> multiply(const std::vector<uint64_t> &a,
-                                        const std::vector<uint64_t> &b);
+  // Multiplies two mpz_t using parallel NTT
+  static void multiply(mpz_t rop, const mpz_t op1, const mpz_t op2);
 
 private:
-  static std::vector<uint64_t> ntt_single_prime(const std::vector<uint64_t> &a,
-                                                const std::vector<uint64_t> &b,
-                                                Prime prime);
+  static uint64_t power(uint64_t base, uint64_t exp, uint64_t mod);
+  static uint64_t modInverse(uint64_t n, uint64_t mod);
+
+  // Helpers to convert mpz_t to/from NTT buffers
+  static std::vector<uint64_t> mpz_to_vec(const mpz_t n, size_t &limbs);
+  static void vec_to_mpz(mpz_t rop, const std::vector<uint64_t> &vec);
 };
 
 } // namespace pi
