@@ -17,6 +17,8 @@ public:
 
   // Multiplies two mpz_t using parallel NTT
   static void multiply(mpz_t rop, const mpz_t op1, const mpz_t op2);
+  
+  static bool use_hybrid; // Flag to toggle between Step 1 and Step 2 strategies
 
 private:
   static uint64_t power(uint64_t base, uint64_t exp, uint64_t mod);
