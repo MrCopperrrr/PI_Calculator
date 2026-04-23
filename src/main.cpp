@@ -178,7 +178,7 @@ int main(int argc, char *argv[]) {
   int64_t iterations = (double)digits / 14.181647 + 200;
   int64_t guard = 256;
 
-  std::cout << "Program:               Pi-Calc v2.5 (Extreme Edition)"
+  std::cout << "Program:               Pi-Calc (Version 3.0)"
             << std::endl;
   std::cout << "Algorithm:             Chudnovsky (1988)" << std::endl;
   std::cout << "Decimal Digits:        " << digits << std::endl;
