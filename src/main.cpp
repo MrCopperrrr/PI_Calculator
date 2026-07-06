@@ -111,7 +111,6 @@ int main(int argc, char *argv[]) {
 #pragma omp single
     BigInt::binary_split(0, iterations, P, Q, T);
   }
-  std::cout << std::endl;
   log_event(total_timer, "Step 1: Binary Splitting Finished", event_log);
 
   log_event(total_timer, "Step 2: Evaluation (Parallel)", event_log);

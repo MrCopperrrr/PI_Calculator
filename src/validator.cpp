@@ -126,10 +126,10 @@ void PiValidator::write_validation_file(
     return;
   }
 
-  out << "Benchmark Validation File - Pi-Calc v2.5 Extreme Custom Engine\n";
+  out << "Benchmark Validation File - Pi-Calc v4\n";
   out << "================================================================================\n\n";
-  out << "Validation Version:    2.5.0\n\n";
-  out << "Program:               Pi-Calc v2.5 (Extreme Custom Engine)\n";
+  out << "Validation Version:    4.0.0\n\n";
+  out << "Program:               Pi-Calc v4\n";
   out << "Architecture:          C++ / OpenMP Task Pool / Parallel Karatsuba 3-Way\n";
   out << "Algorithm:             Chudnovsky (1988) with Binary Splitting\n";
   out << "Computation Mode:      RAM Only (Saturated Multi-core Engine)\n";
