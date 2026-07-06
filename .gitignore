@@ -6,4 +6,7 @@ output.txt
 
 # Ignore VSCode specific folders
 .vscode/
-build
+build/
+Pi - 20260202-194236.txt
+mini-pi_optimized_3_OpenMP.cpp
+minipi.exe

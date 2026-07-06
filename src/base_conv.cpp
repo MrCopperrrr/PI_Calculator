@@ -66,21 +66,31 @@ static const mpz_t *get_power(const std::vector<PowerPair> &powers, int64_t half
 }
 
 void BaseConverter::recursive_split(mpz_t n, int64_t digits, char *out,
-                                    const std::vector<PowerPair> &powers) {
-  if (digits <= 16384) {
-    char *s = mpz_get_str(NULL, 10, n);
-    size_t len = strlen(s);
-
-    if ((int64_t)len < digits) {
-      memset(out, '0', digits - len);
+                                    const std::vector<mpz_t *> &powers,
+                                    int level) {
+  // Use a much higher threshold for tasking to avoid memory bloat
+  // 1 million digits is a good balance between parallelism and memory safety
+  if (digits < 1000000) {
+    if (digits <= 16384) {
+      char *s = mpz_get_str(NULL, 10, n);
+      size_t len = strlen(s);
+      if ((int64_t)len < digits) memset(out, '0', digits - len);
+      memcpy(out + (digits > (int64_t)len ? digits - len : 0), s, len);
+      void (*freefunc)(void *, size_t);
+      mp_get_memory_functions(NULL, NULL, &freefunc);
+      freefunc(s, len + 1);
+      return;
     }
-    size_t copy_len = ((int64_t)len > digits) ? digits : len;
-    size_t offset = ((int64_t)len > digits) ? (len - digits) : 0;
-    memcpy(out + (digits > (int64_t)len ? digits - len : 0), s + offset, copy_len);
 
-    void (*freefunc)(void *, size_t);
-    mp_get_memory_functions(NULL, NULL, &freefunc);
-    freefunc(s, len + 1);
+    int64_t half = digits / 2;
+    mpz_t high, low;
+    mpz_init(high);
+    mpz_init(low);
+    mpz_tdiv_qr(high, low, n, *powers[level]);
+    recursive_split(high, digits - half, out, powers, level + 1);
+    recursive_split(low, half, out + (digits - half), powers, level + 1);
+    mpz_clear(high);
+    mpz_clear(low);
     return;
   }
 
@@ -89,22 +99,27 @@ void BaseConverter::recursive_split(mpz_t n, int64_t digits, char *out,
   mpz_t high, low;
   mpz_init(high);
   mpz_init(low);
-
-  mpz_tdiv_qr(high, low, n, *power);
+  mpz_tdiv_qr(high, low, n, *powers[level]);
 
 #pragma omp task shared(out, powers, high) firstprivate(digits, half)
   {
-    recursive_split(high, digits - half, out, powers);
+    mpz_t h;
+    mpz_init_set(h, high);
+    recursive_split(h, digits - half, out, powers, level + 1);
+    mpz_clear(h);
+    mpz_clear(high); // Clear the firstprivate copy
   }
 
 #pragma omp task shared(out, powers, low) firstprivate(digits, half)
   {
-    recursive_split(low, half, out + (digits - half), powers);
+    mpz_t l;
+    mpz_init_set(l, low);
+    recursive_split(l, half, out + (digits - half), powers, level + 1);
+    mpz_clear(l);
+    mpz_clear(low); // Clear the firstprivate copy
   }
 
 #pragma omp taskwait
-  mpz_clear(high);
-  mpz_clear(low);
 }
 
 void BaseConverter::parallel_to_str(mpz_t n, int64_t total_digits,

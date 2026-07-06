@@ -67,25 +67,21 @@ void BigInt::binary_split(int64_t a, int64_t b, BigInt &P, BigInt &Q,
   }
 
   int64_t m = (a + b) / 2;
-  BigInt P1, Q1, T1, P2, Q2, T2;
 
-  // Aggressive tasking for mid-sized trees to keep all CPU cores saturated
-  if (b - a > 64) {
+  // Optimized tasking: only spawn tasks for large enough chunks to save RAM
+  if (b - a > 100000) {
+    BigInt P1, Q1, T1, P2, Q2, T2;
 #pragma omp task shared(P1, Q1, T1)
     binary_split(a, m, P1, Q1, T1);
 #pragma omp task shared(P2, Q2, T2)
     binary_split(m, b, P2, Q2, T2);
 #pragma omp taskwait
-  } else {
-    binary_split(a, m, P1, Q1, T1);
-    binary_split(m, b, P2, Q2, T2);
-  }
 
-  mpz_t T_part2;
-  mpz_init(T_part2);
+    mpz_t T_part2;
+    mpz_init(T_part2);
 
-  // Task-based parallel merge without overhead of nested thread teams
-  if (b - a > 512) {
+    // High-level merge: use tasking instead of nested parallel regions
+    // T = T1*Q2 + P1*T2, P = P1*P2, Q = Q1*Q2
 #pragma omp task shared(T, T1, Q2)
     NTTMultiplier::multiply(T.value, T1.value, Q2.value);
 #pragma omp task shared(T_part2, P1, T2)
@@ -95,15 +91,45 @@ void BigInt::binary_split(int64_t a, int64_t b, BigInt &P, BigInt &Q,
 #pragma omp task shared(Q, Q1, Q2)
     NTTMultiplier::multiply(Q.value, Q1.value, Q2.value);
 #pragma omp taskwait
+
+    // Early clear: these are no longer needed after the merge
+    T1.clear();
+    T2.clear();
+    Q1.clear();
+    P1.clear();
+    P2.clear();
+    Q2.clear();
+
+    mpz_add(T.value, T.value, T_part2);
+    mpz_clear(T_part2);
   } else {
+    BigInt P1, Q1, T1, P2, Q2, T2;
+    binary_split(a, m, P1, Q1, T1);
+    binary_split(m, b, P2, Q2, T2);
+
+    mpz_t T_part2;
+    mpz_init(T_part2);
+    
+    // T = T1*Q2 + P1*T2
     mpz_mul(T.value, T1.value, Q2.value);
     mpz_mul(T_part2, P1.value, T2.value);
-    mpz_mul(P.value, P1.value, P2.value);
-    mpz_mul(Q.value, Q1.value, Q2.value);
-  }
+    mpz_add(T.value, T.value, T_part2);
+    mpz_clear(T_part2);
+    
+    // Clear T1 and T2 immediately
+    T1.clear();
+    T2.clear();
 
-  mpz_add(T.value, T.value, T_part2);
-  mpz_clear(T_part2);
+    // P = P1*P2
+    mpz_mul(P.value, P1.value, P2.value);
+    P1.clear();
+    P2.clear();
+
+    // Q = Q1*Q2
+    mpz_mul(Q.value, Q1.value, Q2.value);
+    Q1.clear();
+    Q2.clear();
+  }
 }
 
 } // namespace pi
