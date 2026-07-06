@@ -7,6 +7,7 @@
 #include <vector>
 
 namespace pi {
+bool NTTMultiplier::use_hybrid = false;
 
 uint64_t NTTMultiplier::power(uint64_t base, uint64_t exp, uint64_t mod) {
   uint64_t res = 1;
@@ -103,16 +104,33 @@ void parallel_mul_recursive(mpz_t rop, const mpz_t op1, const mpz_t op2,
 }
 
 void NTTMultiplier::multiply(mpz_t rop, const mpz_t op1, const mpz_t op2) {
-  // Threshold to even enter parallel region: 4 Million bits
-  if (std::max(mpz_sizeinbase(op1, 2), mpz_sizeinbase(op2, 2)) < 4000000) {
+  size_t max_bits = std::max(mpz_sizeinbase(op1, 2), mpz_sizeinbase(op2, 2));
+
+  if (mpz_sgn(op1) < 0 || mpz_sgn(op2) < 0 || max_bits < 500000) {
     mpz_mul(rop, op1, op2);
     return;
+  }
+
+  // Strategy for Step 1: Binary Splitting
+  // For extremely large numbers (> 20M bits), GMP's native FFT (O(n log n)) 
+  // is faster than our Parallel Karatsuba (O(n^1.58)) even on 1 core.
+  if (!use_hybrid && max_bits > 20000000) {
+    mpz_mul(rop, op1, op2);
+    return;
+  }
+
+  // Strategy for Step 2: Evaluation (Newton-Raphson)
+  // We MUST use parallel Karatsuba even for huge numbers to bypass GMP's 
+  // single-threaded bottleneck during divisions/sqrt.
+  int depth = 4;
+  if (max_bits > 50000000) {
+    depth = 3; // Limit depth to 3 levels (27 tasks) for huge numbers
   }
 
 #pragma omp parallel
   {
 #pragma omp single
-    parallel_mul_recursive(rop, op1, op2, 2);
+    parallel_mul_recursive(rop, op1, op2, depth);
   }
 }
 

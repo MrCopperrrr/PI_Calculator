@@ -34,6 +34,11 @@ public:
 
   ~BigInt() { mpz_clear(value); }
 
+  void clear() {
+    mpz_clear(value);
+    mpz_init(value);
+  }
+
   bool is_zero() const { return mpz_sgn(value) == 0; }
 
   void add(const BigInt &other) { mpz_add(value, value, other.value); }
