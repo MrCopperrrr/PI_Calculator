@@ -7,13 +7,16 @@
 
 namespace pi {
 
+struct PowerPair;
+
 class BaseConverter {
 public:
   static void parallel_to_str(mpz_t n, int64_t total_digits, char *out_buf);
 
 private:
+  static void collect_powers(int64_t digits, std::vector<int64_t> &needed);
   static void recursive_split(mpz_t n, int64_t digits, char *out,
-                              const std::vector<mpz_t *> &powers, int level);
+                              const std::vector<PowerPair> &powers);
 };
 
 } // namespace pi

@@ -2,16 +2,18 @@
 #include "bigint.hpp"
 #include "ntt.hpp"
 #include "timer.hpp"
+#include "validator.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <gmp.h>
 #include <iostream>
 #include <omp.h>
 #include <string>
+#include <utility>
 #include <vector>
-
 
 #ifdef _WIN32
 #include <windows.h>
@@ -32,6 +34,7 @@ using namespace pi;
 void log_event(const Timer &timer, const char *event) {
   printf("\n%.3f\t%s\n", timer.elapsed_seconds(), event);
   fflush(stdout);
+  ev_list.push_back({t, event});
 }
 
 // Helper to get formatted current time
