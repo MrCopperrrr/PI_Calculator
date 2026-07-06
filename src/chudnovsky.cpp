@@ -70,7 +70,7 @@ void BigInt::binary_split(int64_t a, int64_t b, BigInt &P, BigInt &Q,
   BigInt P1, Q1, T1, P2, Q2, T2;
 
   // Aggressive tasking for mid-sized trees to keep all CPU cores saturated
-  if (b - a > 1024) {
+  if (b - a > 64) {
 #pragma omp task shared(P1, Q1, T1)
     binary_split(a, m, P1, Q1, T1);
 #pragma omp task shared(P2, Q2, T2)
@@ -84,19 +84,17 @@ void BigInt::binary_split(int64_t a, int64_t b, BigInt &P, BigInt &Q,
   mpz_t T_part2;
   mpz_init(T_part2);
 
-  // Parallel merge for almost all levels where it's beneficial
-  if (b - a > 131072) {
-#pragma omp parallel sections
-    {
-#pragma omp section
-      NTTMultiplier::multiply(T.value, T1.value, Q2.value);
-#pragma omp section
-      NTTMultiplier::multiply(T_part2, P1.value, T2.value);
-#pragma omp section
-      NTTMultiplier::multiply(P.value, P1.value, P2.value);
-#pragma omp section
-      NTTMultiplier::multiply(Q.value, Q1.value, Q2.value);
-    }
+  // Task-based parallel merge without overhead of nested thread teams
+  if (b - a > 512) {
+#pragma omp task shared(T, T1, Q2)
+    NTTMultiplier::multiply(T.value, T1.value, Q2.value);
+#pragma omp task shared(T_part2, P1, T2)
+    NTTMultiplier::multiply(T_part2, P1.value, T2.value);
+#pragma omp task shared(P, P1, P2)
+    NTTMultiplier::multiply(P.value, P1.value, P2.value);
+#pragma omp task shared(Q, Q1, Q2)
+    NTTMultiplier::multiply(Q.value, Q1.value, Q2.value);
+#pragma omp taskwait
   } else {
     mpz_mul(T.value, T1.value, Q2.value);
     mpz_mul(T_part2, P1.value, T2.value);

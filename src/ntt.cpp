@@ -62,57 +62,74 @@ void NTTMultiplier::ntt(std::vector<uint64_t> &a, bool invert, uint64_t mod) {
   }
 }
 
-void parallel_mul_recursive(mpz_t rop, const mpz_t op1, const mpz_t op2,
+void parallel_mul_karatsuba(mpz_t rop, const mpz_t op1, const mpz_t op2,
                             int depth) {
-  size_t bits = std::max(mpz_sizeinbase(op1, 2), mpz_sizeinbase(op2, 2));
+  size_t bits1 = mpz_sizeinbase(op1, 2);
+  size_t bits2 = mpz_sizeinbase(op2, 2);
+  size_t max_bits = std::max(bits1, bits2);
 
-  // Only split if depth > 0 AND combined bit count is large enough to justify
-  // overhead
-  if (depth <= 0 || bits < 4000000) {
+  if (depth <= 0 || max_bits < 4000000) {
     mpz_mul(rop, op1, op2);
     return;
   }
 
-  size_t split = bits / 2;
-  mpz_t a_h, a_l, b_h, b_l, r1, r2, r3, r4;
-  mpz_inits(a_h, a_l, b_h, b_l, r1, r2, r3, r4, NULL);
+  size_t split = max_bits / 2;
+
+  mpz_t a_h, a_l, b_h, b_l;
+  mpz_inits(a_h, a_l, b_h, b_l, NULL);
 
   mpz_tdiv_q_2exp(a_h, op1, split);
   mpz_tdiv_r_2exp(a_l, op1, split);
   mpz_tdiv_q_2exp(b_h, op2, split);
   mpz_tdiv_r_2exp(b_l, op2, split);
 
-#pragma omp task shared(r1) firstprivate(depth)
-  parallel_mul_recursive(r1, a_h, b_h, depth - 1);
-#pragma omp task shared(r2) firstprivate(depth)
-  parallel_mul_recursive(r2, a_h, b_l, depth - 1);
-#pragma omp task shared(r3) firstprivate(depth)
-  parallel_mul_recursive(r3, a_l, b_h, depth - 1);
-#pragma omp task shared(r4) firstprivate(depth)
-  parallel_mul_recursive(r4, a_l, b_l, depth - 1);
+  mpz_t z2, z0, z1, sum_a, sum_b;
+  mpz_inits(z2, z0, z1, sum_a, sum_b, NULL);
+
+  mpz_add(sum_a, a_h, a_l);
+  mpz_add(sum_b, b_h, b_l);
+
+#pragma omp task shared(z2)
+  parallel_mul_karatsuba(z2, a_h, b_h, depth - 1);
+
+#pragma omp task shared(z0)
+  parallel_mul_karatsuba(z0, a_l, b_l, depth - 1);
+
+#pragma omp task shared(z1)
+  parallel_mul_karatsuba(z1, sum_a, sum_b, depth - 1);
 
 #pragma omp taskwait
 
-  mpz_mul_2exp(r1, r1, 2 * split);
-  mpz_add(r2, r2, r3);
-  mpz_mul_2exp(r2, r2, split);
-  mpz_add(rop, r1, r2);
-  mpz_add(rop, rop, r4);
+  mpz_sub(z1, z1, z2);
+  mpz_sub(z1, z1, z0);
 
-  mpz_clears(a_h, a_l, b_h, b_l, r1, r2, r3, r4, NULL);
+  mpz_mul_2exp(z2, z2, 2 * split);
+  mpz_mul_2exp(z1, z1, split);
+  mpz_add(rop, z2, z1);
+  mpz_add(rop, rop, z0);
+
+  mpz_clears(a_h, a_l, b_h, b_l, z2, z0, z1, sum_a, sum_b, NULL);
 }
 
 void NTTMultiplier::multiply(mpz_t rop, const mpz_t op1, const mpz_t op2) {
-  // Threshold to even enter parallel region: 4 Million bits
-  if (std::max(mpz_sizeinbase(op1, 2), mpz_sizeinbase(op2, 2)) < 4000000) {
+  size_t max_bits = std::max(mpz_sizeinbase(op1, 2), mpz_sizeinbase(op2, 2));
+  if (max_bits < 4000000) {
     mpz_mul(rop, op1, op2);
     return;
   }
 
+  int depth = 1;
+  if (max_bits >= 100000000)
+    depth = 2;
+
+  if (omp_in_parallel()) {
+    parallel_mul_karatsuba(rop, op1, op2, depth);
+  } else {
 #pragma omp parallel
-  {
+    {
 #pragma omp single
-    parallel_mul_recursive(rop, op1, op2, 2);
+      parallel_mul_karatsuba(rop, op1, op2, depth);
+    }
   }
 }
 

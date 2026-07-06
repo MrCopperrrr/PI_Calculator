@@ -6,3 +6,4 @@ output.txt
 
 # Ignore VSCode specific folders
 .vscode/
+build

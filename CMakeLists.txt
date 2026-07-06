@@ -18,6 +18,7 @@ set(SOURCES
     src/chudnovsky.cpp 
     src/base_conv.cpp
     src/ntt.cpp
+    src/validator.cpp
 )
 
 include_directories(include)
